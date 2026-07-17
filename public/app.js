@@ -278,7 +278,8 @@ function buildCustomersByBillingNumber(rows){
         docNumber: pick(r, ['Number','number']) || '',
         date: pick(r, ['Invoice/Bill Date','Bill Date','Date','date']),
         dueDate: pick(r, ['Due Date','due date','DueDate']),
-        amount: parseFloat(pick(r, ['Total Signed','Total in Currency Signed'])) || 0
+        amount: parseFloat(pick(r, ['Total Signed','Total in Currency Signed'])) || 0,
+        status: pick(r, ['Status','status']) || ''
       }));
       return {
         blKey, blNumber: blKey,
@@ -326,7 +327,8 @@ function buildCustomersByPartnerOnly(rows){
         docNumber: pick(r, ['Number','number']) || '',
         date: pick(r, ['Date','date']),
         dueDate: pick(r, ['Due Date','due date','DueDate']),
-        amount: parseFloat(pick(r, ['Total in Currency Signed','Total Signed'])) || 0
+        amount: parseFloat(pick(r, ['Total in Currency Signed','Total Signed'])) || 0,
+        status: pick(r, ['Status','status']) || ''
       }));
       return { blKey: mk, blNumber:'', docDate:'', dueDate:'', address:'', seller, items };
     }).sort((a,b) => b.blKey.localeCompare(a.blKey)); // newest month first ("yyyy-mm" sorts lexically)
@@ -845,20 +847,20 @@ function flattenChunksWithName(customerList){
 }
 
 function buildOdooRows(customerList){
-  const rows = [['Name','Customer','Bill Date','Bill Date Due','Billing Line/Invoices']];
+  const rows = [['Name','Customer','Bill Date','Bill Date Due','Billing Line/Invoices','Status']];
   const chunks = flattenChunksWithName(customerList);
   chunks.forEach(ch => {
     const dateObj = parseDdMmYyyy(ch.docDate);
     const dueObj = parseDdMmYyyy(ch.dueDate);
     if(ch.items.length === 0){
-      rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, '']);
+      rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, '', '']);
       return;
     }
     ch.items.forEach((it, idx) => {
       if(idx === 0){
-        rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, it.docNumber]);
+        rows.push([ch.blNumber||'', ch.name, dateObj, dueObj, it.docNumber, it.status||'']);
       } else {
-        rows.push([null, null, null, null, it.docNumber]);
+        rows.push([null, null, null, null, it.docNumber, it.status||'']);
       }
     });
   });
@@ -868,7 +870,7 @@ function buildOdooRows(customerList){
 function odooWorkbookArray(customerList){
   const rows = buildOdooRows(customerList);
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:18},{wch:34},{wch:14},{wch:14},{wch:22}];
+  ws['!cols'] = [{wch:18},{wch:34},{wch:14},{wch:14},{wch:22},{wch:16}];
   for(let r=1; r<rows.length; r++){
     ['C','D'].forEach(col => {
       const ref = col + (r+1);
