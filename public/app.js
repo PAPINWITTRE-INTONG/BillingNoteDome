@@ -95,9 +95,9 @@ function fmtDate(d){
   if(!d) return '';
   let dt = d instanceof Date ? d : new Date(d);
   if(isNaN(dt)) return String(d);
-  const dd = String(dt.getDate()).padStart(2,'0');
-  const mm = String(dt.getMonth()+1).padStart(2,'0');
-  return `${dd}/${mm}/${dt.getFullYear()}`;
+  const dd = String(dt.getUTCDate()).padStart(2,'0');
+  const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${dt.getUTCFullYear()}`;
 }
 function fmtAmount(n){
   n = Number(n)||0;
@@ -200,7 +200,7 @@ const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','ม�
 function monthKey(d){
   const dt = d instanceof Date ? d : new Date(d);
   if(isNaN(dt)) return 'ไม่ทราบวันที่';
-  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
 }
 function monthLabel(key){
   if(key === 'ไม่ทราบวันที่') return key;
