@@ -1150,6 +1150,39 @@ document.getElementById('exportOneBtn').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('printBtn').addEventListener('click', async () => {
+  if(currentIndex < 0) return;
+  const c = customers[currentIndex];
+  exportCancelRequested = false;
+  const tracker = createProgressTracker();
+  setProgress(2, `กำลังเตรียมพิมพ์ ${c.name}…`);
+  try{
+    const pdfBlob = await customerToPdfBlob(c, (done, total) => {
+      tracker.update(done, total, `กำลังเตรียมพิมพ์: หน้า ${done}/${total} — ${c.name}`);
+    });
+    throwIfCancelled();
+    setProgress(100, 'พร้อมพิมพ์');
+    const url = URL.createObjectURL(pdfBlob);
+    const printWin = window.open(url, '_blank');
+    if(!printWin){
+      showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — กรุณาอนุญาต popup แล้วลองใหม่');
+      return;
+    }
+    printWin.addEventListener('load', () => {
+      printWin.focus();
+      printWin.print();
+    });
+  }catch(err){
+    hideProgress();
+    if(err instanceof ExportCancelledError){
+      showToast('ยกเลิกการพิมพ์แล้ว');
+    } else {
+      console.error(err);
+      showToast('เกิดข้อผิดพลาดระหว่างเตรียมพิมพ์');
+    }
+  }
+});
+
 document.getElementById('exportAllBtn').addEventListener('click', async () => {
   if(customers.length === 0) return;
   const wantPdf = exportFormats.pdf, wantXlsx = exportFormats.xlsx, wantOdoo = exportFormats.odoo;
