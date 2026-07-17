@@ -787,6 +787,49 @@ async function customerToPdfBlob(c, onPage){
   return pdf.output('blob');
 }
 
+/** Combines every customer's pages into a single PDF, in the same order as the sidebar. */
+async function allCustomersToPdfBlob(customerList, onProgress){
+  const paperKey = currentPaperKey();
+  const dims = getPaperDims(paperKey);
+  const pageH = pageHeightPx(paperKey);
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({unit:'mm', format:[dims.w, dims.h]});
+  const pageWmm = pdf.internal.pageSize.getWidth();
+  const pageHmm = pdf.internal.pageSize.getHeight();
+
+  const perCustomerPages = [];
+  let totalPages = 0;
+  for(const c of customerList){
+    throwIfCancelled();
+    const metrics = await measureMetrics(c, paperKey);
+    const pages = paginateItems(c.chunks, metrics, pageH);
+    perCustomerPages.push(pages);
+    totalPages += pages.length;
+  }
+
+  let done = 0, pageAdded = false;
+  for(let ci=0; ci<customerList.length; ci++){
+    const c = customerList[ci];
+    const pages = perCustomerPages[ci];
+    for(const pg of pages){
+      throwIfCancelled();
+      const canvas = await capturePageToCanvas(c, pg.chunk, pg.items, pg.includeFooter, pg.pageNum, pg.pageCount, paperKey, pg.fillerCount);
+      const imgData = canvas.toDataURL('image/png');
+      const imgW = pageWmm;
+      const imgH = canvas.height * imgW / canvas.width;
+      let renderH = imgH, renderW = imgW;
+      if(imgH > pageHmm){ renderH = pageHmm; renderW = canvas.width * renderH / canvas.height; }
+      const x = (pageWmm - renderW)/2;
+      if(pageAdded) pdf.addPage([dims.w, dims.h]);
+      pdf.addImage(imgData, 'PNG', x, 0, renderW, renderH);
+      pageAdded = true;
+      done++;
+      if(onProgress) onProgress(done, totalPages, c.name);
+    }
+  }
+  return pdf.output('blob');
+}
+
 /* ============================= EXCEL GENERATION ============================= */
 function parseDdMmYyyy(s){
   if(!s) return null;
@@ -1159,6 +1202,39 @@ document.getElementById('printBtn').addEventListener('click', async () => {
   try{
     const pdfBlob = await customerToPdfBlob(c, (done, total) => {
       tracker.update(done, total, `กำลังเตรียมพิมพ์: หน้า ${done}/${total} — ${c.name}`);
+    });
+    throwIfCancelled();
+    setProgress(100, 'พร้อมพิมพ์');
+    const url = URL.createObjectURL(pdfBlob);
+    const printWin = window.open(url, '_blank');
+    if(!printWin){
+      showToast('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — กรุณาอนุญาต popup แล้วลองใหม่');
+      return;
+    }
+    printWin.addEventListener('load', () => {
+      printWin.focus();
+      printWin.print();
+    });
+  }catch(err){
+    hideProgress();
+    if(err instanceof ExportCancelledError){
+      showToast('ยกเลิกการพิมพ์แล้ว');
+    } else {
+      console.error(err);
+      showToast('เกิดข้อผิดพลาดระหว่างเตรียมพิมพ์');
+    }
+  }
+});
+
+document.getElementById('printAllBtn').addEventListener('click', async () => {
+  if(customers.length === 0) return;
+  if(!confirm(`เตรียมพิมพ์เอกสารทั้งหมด ${customers.length} ลูกค้า เป็นไฟล์เดียว ต้องการดำเนินการต่อหรือไม่?`)) return;
+  exportCancelRequested = false;
+  const tracker = createProgressTracker();
+  setProgress(2, `กำลังเตรียมพิมพ์ทั้งหมด (${customers.length} ลูกค้า)…`);
+  try{
+    const pdfBlob = await allCustomersToPdfBlob(customers, (done, total, name) => {
+      tracker.update(done, total, `กำลังเตรียมพิมพ์: หน้า ${done}/${total} — ${name}`);
     });
     throwIfCancelled();
     setProgress(100, 'พร้อมพิมพ์');
